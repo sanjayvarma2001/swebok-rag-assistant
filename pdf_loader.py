@@ -1,15 +1,6 @@
 from pypdf import PdfReader
 import json
 
-"""
-1. what this file need to do?
-PDF Loader is module which reads the pdf files whiich separated by pages and 
-accessed by index of sections for each topic.
-2. requirements?
-3. output should obtained?
-
-"""
-
 PDF_PATH = "docs/swebok.pdf"
 
 def load_pdf_pages():

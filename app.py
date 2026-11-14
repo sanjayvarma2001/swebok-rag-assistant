@@ -11,7 +11,7 @@ response = requests.post(
     timeout=30,
 )
 
-def chunk_by_words(text, size=100, overlap=30):
+def chunk_by_words(text, size, overlap=30):
     words =text.split()
     step = size-overlap
     return [" ".join(words[i:i+size]) for i in range(0,len(words),step)]
