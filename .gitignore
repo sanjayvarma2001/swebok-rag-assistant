@@ -3,3 +3,5 @@ __pycache__
 venv/
 docs/
 pages.json
+data/
+debug/
