@@ -5,9 +5,6 @@ from pathlib import Path
 import sys
 import unicodedata
 
-with open("pages.json", encoding="utf-8") as f:
-    raw = json.load(f)
-
 FIRST_CONTENT_PAGE = 38
 LAST_CONTENT_PAGE = 385
 TABLE_MARKER = r"MATRIX\s+OF\s+TOPICS\s+VS\.\s+REFERENCE\s+MATERIAL"
@@ -144,17 +141,24 @@ def build_chunks(text):
 
 
 def save_text(name, text, folder="debug"):
+    """Save a string to `folder/name` as UTF-8, creating the folder if needed."""
     path = Path(folder)
     path.mkdir(parents=True, exist_ok=True)
     (path / name).write_text(text, encoding="utf-8")
 
-def save_json(name, data, folder="debug"):
+def save_json(name, data, folder: str | Path = "debug", indent: int | None = 2):
+    """Save data as JSON to `folder/name`, creating the folder if needed.
+
+    Use indent=2 for files people read, and indent=None for large files
+    only programs read (such as embeddings), to keep them small."""
     path = Path(folder)
     path.mkdir(parents=True, exist_ok=True)
     with open(path / name, "w", encoding="utf-8") as f:
-        json.dump(data,f,ensure_ascii=False, indent=2) 
+        json.dump(data,f,ensure_ascii=False, indent=indent) 
 
 if __name__ == '__main__':
+    with open("pages.json", encoding="utf-8") as f:
+        raw = json.load(f)
     content = keep_content_pages(raw, FIRST_CONTENT_PAGE, LAST_CONTENT_PAGE)
     removed_header = clean_pages(content)
     if DEBUG:
@@ -169,6 +173,6 @@ if __name__ == '__main__':
     if DEBUG:
         save_text("intro_cleaned.txt",intro_cleaned, "debug/software_engineering")
     chunks = build_chunks(intro_cleaned)
-    print(len(chunks))
+    print([len(chunk["text"]) for chunk in chunks[:5]])
     print(chunks[0]["id"], chunks[1]["id"], chunks[-1]["id"])
     save_json("chunks.json",chunks,folder="data/software_engineering")
