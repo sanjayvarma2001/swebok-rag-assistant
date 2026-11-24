@@ -4,7 +4,7 @@ A chatbot that helps junior developers and students learn software engineering c
 
 It's built with retrieval-augmented generation (RAG): the guide is split into sections and embedded once, and each question retrieves the most relevant sections before Gemini writes the answer.
 
-> Status: work in progress. Indexing is complete: 1,157 chunks from the introduction and 18 chapters, each embedded with Voyage AI. Retrieval and answers are next.
+> Status: work in progress. Indexing and retrieval work: 1,157 embedded chunks, and questions return the 3 most relevant sections. Answer generation with Gemini is next.
 
 ## How it works
 
@@ -21,8 +21,8 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 
 ### 2. Answering (every question)
 
-1. **Embed the question** with the same Voyage model *(planned)*.
-2. **Retrieve:** compare it with every chunk using cosine similarity and take the 3 closest *(planned)*.
+1. **Embed the question** with the same Voyage model.
+2. **Retrieve:** compare it with every chunk using cosine similarity and take the 3 closest.
 3. **Generate:** send the question and those chunks' text to Gemini, with instructions to answer only from that text and cite the section IDs *(planned)*.
 4. If the answer isn't in the retrieved sections, the assistant says it doesn't know instead of guessing *(planned)*.
 
@@ -52,6 +52,7 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
    - Add `--debug` to also save each cleaning step to `debug/software_engineering/` for inspection.
 3. `python embedder.py` → embeds every chunk and writes `data/software_engineering/embeddings.json`
    - On Voyage's free limits this takes about 50 minutes (one batch per minute). Keep the computer awake while it runs.
+4. `python retriever.py` → asks for a question and prints the 3 most similar chunks with their scores, IDs and headings.
 
 ## Design decisions
 
@@ -91,11 +92,19 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 
 - **Answers come only from the retrieved text, with section citations** *(planned)*. Grounding the model in the guide reduces made-up answers. If the answer isn't in the retrieved sections, the assistant says it doesn't know.
 
+- **The question and the chunks use the same model, set in one place.** config.py holds the Voyage client and the model name (voyage-4), and both the embedder and the retriever import them. Vectors from different models can't be compared, so they must never drift apart.
+- **Questions are embedded with input_type="query", chunks with "document".** Voyage tunes each vector for its role, so questions and the passages that answer them match better.
+- **Brute-force search over all chunks.** Every question is compared with all 1,157 chunk vectors, which is exact and takes well under a second at this size. An approximate index (pgvector, FAISS) only becomes worthwhile at hundreds of thousands of chunks.
+- **Cosine similarity is written by hand,** in plain Python, to show how retrieval works. NumPy would be faster if needed.
+
 ## Known limitations
 
 - **Parts are cut at fixed positions,** so a part can start or end mid-word. Cutting at sentence ends is planned.
 - **Some sections are very long** (for example, one chapter 8 section splits into 10+ parts). This may mean some subsection headings weren't detected. To be checked during retrieval testing.
 - Fixing either means re-chunking and re-embedding, so fixes will be batched together.
+- **Numbered lists inside chapters are detected as sections,** creating 47 duplicate chunk IDs and ambiguous citations. Tracked in issue #[number].
+- **Some headings include reference codes,** such as 5.3. Unit Testing Tools [1-c22, 2-c8].
+- **Paraphrased questions score lower than direct ones** (about 0.42 compared with 0.67 in tests), so the fallback threshold must not be set too high.
 
 ## Roadmap
 
@@ -106,7 +115,7 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 - [x] Chapter and section detection
 - [x] Section-based chunks with chapter IDs and size splitting
 - [x] Embeddings (Voyage AI, batched for the free tier)
-- [ ] Retrieval with cosine similarity
+- [x] Retrieval with cosine similarity
 - [ ] Answers with section citations
 - [ ] Question loop (`app.py`)
 - [ ] Evaluation with 10 test questions
