@@ -1,5 +1,6 @@
 pypdf==7.0.0
 requests==2.34.2
+voyageai==0.6.0
 google-genai==3.2.0
 python-dotenv==1.2.4
 fonttools==4.68.0

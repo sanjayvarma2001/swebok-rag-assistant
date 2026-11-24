@@ -1,10 +1,10 @@
 # Software Engineer Assistant - Chat Bot
 
-A chatbot that helps junior developers and students learn software engineering concepts. It answers questions using only the SWEBOK Guide (v4.0a) and cites the page each answer comes from.
+A chatbot that helps junior developers and students learn software engineering concepts. It answers questions using only the SWEBOK Guide (v4.0a) and cites the chapter and section each answer comes from.
 
-It’s built with retrieval-augmented generation (RAG): the guide is split into sections and embedded once, and each question retrieves the most relevant sections before Gemini writes the answer.
+It's built with retrieval-augmented generation (RAG): the guide is split into sections and embedded once, and each question retrieves the most relevant sections before Gemini writes the answer.
 
-> Status: work in progress. PDF loading and cleaning work; retrieval and answers are next.
+> Status: work in progress. Indexing is complete: 1,157 chunks from the introduction and 18 chapters, each embedded with Voyage AI. Retrieval and answers are next.
 
 ## How it works
 
@@ -14,18 +14,17 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 
 1. **Load:** read the PDF page by page and save each page's text by page number to `pages.json`.
 2. **Filter:** keep only the content pages (introduction to the last chapter), skipping the table of contents, references and appendices.
-3. **Clean:** remove the running header from each page and rejoin words split across lines.
-4. **Chunk:** join the pages into one text and split it by section (e.g. "4.2 Unit Testing"), keeping the page numbers for each chunk.
-5. **Embed:** convert each chunk into a 1024-number vector with Voyage AI and save the text, pages and vector to `chunks.json`.
+3. **Clean:** remove the running header from each page, normalise special characters such as ligatures, and rejoin words split across lines.
+4. **Remove tables:** delete the 18 "Matrix of Topics vs. Reference Material" tables and the introduction's list of KAs. Their rows look like section headings, so they would create duplicate headings and false matches.
+5. **Chunk:** split the introduction by size, then make one chunk per chapter opening and per section, with IDs such as `ch04-4.2.`. Long sections are split into parts (`ch04-4.2.-p1`, `-p2`).
+6. **Embed:** convert each chunk into a 1024-number vector with Voyage AI and save the chunks with their vectors to `embeddings.json`.
 
 ### 2. Answering (every question)
 
-1. **Embed the question** with the same Voyage model.
-2. **Retrieve:** compare it with every chunk using cosine similarity and take the 3 closest.
-3. **Generate:** send the question and those chunks' text to Gemini, with instructions to answer only from that text and cite the pages.
-4. If the answer isn't in the retrieved sections, the assistant says it doesn't know instead of guessing.
-
-## Tech stack
+1. **Embed the question** with the same Voyage model *(planned)*.
+2. **Retrieve:** compare it with every chunk using cosine similarity and take the 3 closest *(planned)*.
+3. **Generate:** send the question and those chunks' text to Gemini, with instructions to answer only from that text and cite the section IDs *(planned)*.
+4. If the answer isn't in the retrieved sections, the assistant says it doesn't know instead of guessing *(planned)*.
 
 ## Tech stack
 
@@ -33,48 +32,84 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 | --- | --- |
 | Language | Python |
 | PDF text extraction | pypdf |
-| Embeddings | Voyage AI (`voyage-4`, via `requests`) |
+| Embeddings | Voyage AI (`voyage-4`, `voyageai` SDK) |
 | Answer generation | Google Gemini (`google-genai`) |
-| Storage | JSON files (`pages.json`, `chunks.json`) |
+| Storage | JSON files (`pages.json`, `chunks.json`, `embeddings.json`) |
 | Configuration | python-dotenv |
 
 ## Setup
+
 1. Clone and enter the repo
 2. Create and activate a virtual environment (Windows / macOS-Linux)
 3. Install requirements
-4. Download the SWEBOK Guide v4.0a, save it as docs/swebok.pdf
-5. Create .env with GEMINI_API_KEY and VOYAGE_API_KEY
+4. Download the SWEBOK Guide v4.0a, save it as `docs/swebok.pdf`
+5. Create `.env` with `GEMINI_API_KEY` and `VOYAGE_API_KEY`
 
 ## Usage
-1. python pdf_loader.py   → creates pages.json
-2. python chunker.py      → filters and cleans pages (work in progress)
+
+1. `python pdf_loader.py` → creates `pages.json`
+2. `python chunker.py` → cleans the text and writes `data/software_engineering/chunks.json`
+   - Add `--debug` to also save each cleaning step to `debug/software_engineering/` for inspection.
+3. `python embedder.py` → embeds every chunk and writes `data/software_engineering/embeddings.json`
+   - On Voyage's free limits this takes about 50 minutes (one batch per minute). Keep the computer awake while it runs.
 
 ## Design decisions
 
 - **Raw text is saved once and never changed.** `pdf_loader.py` writes each page's text to `pages.json`, and cleaning happens in a separate step. Cleaning takes several tries; this way each attempt re-runs in seconds without re-reading the PDF, and a mistake never damages the original.
 
-- **The first line of every page is removed.** It is always the running header (`SWEBOK® GUIDE V4.0a` or the chapter title, with the page number). This was checked against the data, not assumed: all 348 content pages have a header on line 1, including the introduction's roman-numeral pages.
+- **The first line of every page is removed.** It is the running header (`SWEBOK® GUIDE V4.0a` or the chapter title, with the page number). The introduction's roman-numeral pages follow the same pattern.
 
 - **The table of contents, reference lists and appendices are skipped.** The table of contents lists every section title, so it matches almost any question but contains no answers. Reference lists are mostly names and titles. Both would push useless chunks into the top results.
 
+- **Ligatures are normalised.** The PDF stores some letter pairs as single characters (`ﬁ`, `ﬂ`), so `Speciﬁcation` and `Specification` look the same but don't match in code. Unicode NFKC normalisation replaces them with plain letters and keeps the case.
+
 - **Words split across lines are rejoined.** `"pro -\nduces"` becomes `"produces"`. Only that exact pattern (a space, a hyphen and a line break) is joined, so real hyphens such as `"two- or three-level"` are kept.
 
-- **Chunks follow sections, not a fixed size** *(planned)*. Sections are natural units of meaning, and the section number (e.g. 4.2) gives each chunk an ID and a clear citation. Long sections are split further, with the heading repeated in each piece so no piece loses its context.
+- **Tables are removed by position, not by text.** Each matrix table starts at its title and ends where the next chapter begins. Matching repeated text would miss rows, because pypdf puts each table cell on its own line and the reference codes differ between rows. The introduction's list of KAs is removed the same way: it ends at the item whose number equals the chapter count.
 
-- **Pages are joined before chunking** *(planned)*. Sections often run across a page break, and chunking page by page would cut them in half. The position where each page starts is recorded, so every chunk still knows its page numbers.
+- **Tables with real content and figures are kept, for now.** Tables that explain concepts hold useful text, and figure labels don't create false headings. Retrieval tests will show whether either needs cleaning.
 
-- **A JSON file instead of a vector database** *(planned)*. A few hundred chunks can be compared one by one in milliseconds. A vector database with an approximate-nearest-neighbour index (such as pgvector or Chroma) becomes worthwhile at tens of thousands of chunks.
+- **Chunks follow sections, not a fixed size.** Sections are natural units of meaning, and the chapter and section numbers give each chunk an ID and a clear citation. Positions are used as cut points: each chunk runs from its heading to the next chapter or section heading, so no section runs into the next chapter.
 
-- **Answers come only from the retrieved text, with page citations** *(planned)*. Grounding the model in the guide reduces made-up answers. If the answer isn't in the retrieved sections, the assistant says it doesn't know.
+- **Long sections are split at 1,500 characters with 150 characters of overlap.** The overlap keeps an idea that crosses a cut in both parts. The size is a starting value to be tuned with evaluation results.
+
+- **The introduction is chunked by size.** Its numbered lists aren't sections, so it is split off before section detection and divided into parts (`intro-p1`, `intro-p2`).
+
+- **Embeddings are created in batches of 25, one batch per minute.** Voyage's free tier allows 10,000 tokens per minute. A batch of 25 chunks is under 10,000 tokens, so one batch a minute stays within the limit. A rate-limited batch waits 60 seconds and retries, up to 5 times, so a failure retries only that batch.
+
+- **Embeddings are computed once and saved.** Embedding all chunks takes about 50 minutes on the free tier, so it never runs on each question. Only the question is embedded at answer time.
+
+- **The Voyage SDK replaced the earlier REST workaround.** The `voyageai` SDK was blocked by Windows Smart App Control at first, so the project called the API through `requests`. With newer package versions the SDK now runs, so the embedder uses it. The REST version remains a fallback if it is blocked again.
+
+- **`embeddings.json` is saved without indentation.** It holds over a million numbers. Indenting would put each number on its own line and make the file several times larger; nobody reads it by eye.
+
+- **Citations use section IDs, not page numbers.** Section numbers restart in each chapter, so a chapter-and-section ID is the reliable reference. Page numbers are a possible later addition.
+
+- **A JSON file instead of a vector database.** About a thousand chunks can be compared one by one in milliseconds. A vector database (such as pgvector) becomes worthwhile when the app is deployed or the data grows to tens of thousands of chunks.
+
+- **Generated data isn't committed.** `pages.json`, `chunks.json`, `embeddings.json` and the debug files contain the guide's text, so they stay out of the repository. Running the scripts rebuilds them.
+
+- **Answers come only from the retrieved text, with section citations** *(planned)*. Grounding the model in the guide reduces made-up answers. If the answer isn't in the retrieved sections, the assistant says it doesn't know.
+
+## Known limitations
+
+- **Parts are cut at fixed positions,** so a part can start or end mid-word. Cutting at sentence ends is planned.
+- **Some sections are very long** (for example, one chapter 8 section splits into 10+ parts). This may mean some subsection headings weren't detected. To be checked during retrieval testing.
+- Fixing either means re-chunking and re-embedding, so fixes will be batched together.
 
 ## Roadmap
 
 - [x] PDF loading
 - [x] Page filtering and header cleaning
-- [ ] Section-based chunking
-- [ ] Embeddings
+- [x] Ligature normalisation
+- [x] Table removal (18 matrix tables and the introduction's KA list)
+- [x] Chapter and section detection
+- [x] Section-based chunks with chapter IDs and size splitting
+- [x] Embeddings (Voyage AI, batched for the free tier)
 - [ ] Retrieval with cosine similarity
-- [ ] Answers with page citations
+- [ ] Answers with section citations
+- [ ] Question loop (`app.py`)
 - [ ] Evaluation with 10 test questions
+- [ ] Sentence-end cuts, merging very short chunks, repeating headings in split parts
 - [ ] Hybrid search (BM25 + vectors)
-- [ ] Later: FastAPI endpoint and a web UI
+- [ ] Later: FastAPI endpoint, pgvector and a web UI
