@@ -47,7 +47,7 @@ def cosine(a,b):
     length_b = math.sqrt(sum(y*y for y in b))
     return dot_product / (length_a * length_b)
 
-def retrieve(query, k=3):
+def retrieve(query, k=3,min_score=0.35):
     """Find the k chunks most similar to the question.
 
     Embeds the question, scores every chunk with cosine similarity,
@@ -64,12 +64,28 @@ def retrieve(query, k=3):
     for i, score in ranked[:k]:
         chunk = embeddings[i]
         results.append({"id":chunk["id"], "heading":chunk["heading"], "text": chunk["text"], "score": round(score, 4)})
-    return results
+    return [r for r in results if r["score"] >= min_score]
+
+def formatted_string(chunks):
+    blocks = []
+    for c in chunks:
+        text = " ".join(c["text"].split())
+        string = f"[{c['id']}] {c['heading']}\n{text}"
+        blocks.append(string)
+    return "\n\n".join(blocks)
+
+#Debugging and Individual testing
 
 if __name__ == "__main__":
-    query = str(input("Question: "))
-    for r in retrieve(query):
+    query = str(input("Question: ")).strip().strip('"')
+    retrieved = retrieve(query)
+    for r in retrieved:
         print(r["score"], r["id"], "|", r["heading"])
+
+    format_chunks = formatted_string(retrieved)
+    print(format_chunks)
     from collections import Counter
     dupes = [i for i, n in Counter(c["id"] for c in embeddings).items() if n > 1]
     print(len(dupes), dupes[:10])
+
+    print([r["score"] for r in retrieve("How do I bake bread?")])

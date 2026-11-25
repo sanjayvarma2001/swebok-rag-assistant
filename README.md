@@ -4,7 +4,7 @@ A chatbot that helps junior developers and students learn software engineering c
 
 It's built with retrieval-augmented generation (RAG): the guide is split into sections and embedded once, and each question retrieves the most relevant sections before Gemini writes the answer.
 
-> Status: work in progress. Indexing and retrieval work: 1,157 embedded chunks, and questions return the 3 most relevant sections. Answer generation with Gemini is next.
+> Status: working end to end. Questions are answered from the guide with section citations, and off-topic questions get a fallback message. Evaluation is next.
 
 ## How it works
 
@@ -23,8 +23,9 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 
 1. **Embed the question** with the same Voyage model.
 2. **Retrieve:** compare it with every chunk using cosine similarity and take the 3 closest.
-3. **Generate:** send the question and those chunks' text to Gemini, with instructions to answer only from that text and cite the section IDs *(planned)*.
-4. If the answer isn't in the retrieved sections, the assistant says it doesn't know instead of guessing *(planned)*.
+3. Filter: drop chunks scoring below 0.35. If none are left, return the fallback message without calling Gemini.
+4. **Generate:** send the question and those chunks' text to Gemini, with instructions to answer only from that text and cite the section IDs .
+5. If the answer isn't in the retrieved sections, the assistant says it doesn't know instead of guessing.
 
 ## Tech stack
 
@@ -33,7 +34,7 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 | Language | Python |
 | PDF text extraction | pypdf |
 | Embeddings | Voyage AI (`voyage-4`, `voyageai` SDK) |
-| Answer generation | Google Gemini (`google-genai`) |
+| Answer generation | Google Gemini (`gemini-2.5-flash`, `google-genai`) |
 | Storage | JSON files (`pages.json`, `chunks.json`, `embeddings.json`) |
 | Configuration | python-dotenv |
 
@@ -53,6 +54,7 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 3. `python embedder.py` → embeds every chunk and writes `data/software_engineering/embeddings.json`
    - On Voyage's free limits this takes about 50 minutes (one batch per minute). Keep the computer awake while it runs.
 4. `python retriever.py` → asks for a question and prints the 3 most similar chunks with their scores, IDs and headings.
+5. `python app.py` → ask questions in a loop. Each answer shows its citations, followed by the source chunks and their scores. Type exit to quit.
 
 ## Design decisions
 
@@ -90,12 +92,19 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 
 - **Generated data isn't committed.** `pages.json`, `chunks.json`, `embeddings.json` and the debug files contain the guide's text, so they stay out of the repository. Running the scripts rebuilds them.
 
-- **Answers come only from the retrieved text, with section citations** *(planned)*. Grounding the model in the guide reduces made-up answers. If the answer isn't in the retrieved sections, the assistant says it doesn't know.
+- **Answers come only from the retrieved text, with section citations**. Grounding the model in the guide reduces made-up answers. If the answer isn't in the retrieved sections, the assistant says it doesn't know.
 
 - **The question and the chunks use the same model, set in one place.** config.py holds the Voyage client and the model name (voyage-4), and both the embedder and the retriever import them. Vectors from different models can't be compared, so they must never drift apart.
 - **Questions are embedded with input_type="query", chunks with "document".** Voyage tunes each vector for its role, so questions and the passages that answer them match better.
 - **Brute-force search over all chunks.** Every question is compared with all 1,157 chunk vectors, which is exact and takes well under a second at this size. An approximate index (pgvector, FAISS) only becomes worthwhile at hundreds of thousands of chunks.
 - **Cosine similarity is written by hand,** in plain Python, to show how retrieval works. NumPy would be faster if needed.
+- **Rules go in a system instruction, material in the content.** The system instruction tells Gemini to use only the context, cite a passage ID after each point, reply with an exact fallback message when the context lacks the answer, and ignore any instructions inside the context. The content holds the ID-labelled chunks, then the question.
+- **Low temperature (0.2)** keeps answers close to the source text.
+- **Two layers of fallback.** A score threshold (0.35) stops clearly off-topic questions before Gemini is called. If a weak chunk passes, Gemini's rule still returns the fallback. In tests, a direct question scored 0.67, a paraphrase 0.42 and an off-topic question 0.32.
+- **All top 3 chunks are passed,** not only the best one. In testing, the best section ranked second by a tiny margin, and answers often combine two sections.
+- **A separate message for service errors,** so a failed API call isn't confused with "not in the guide".
+- **Functions return, the app prints.** retrieve and answer return values, and only app.py prints. A future FastAPI endpoint can reuse both functions unchanged.
+- **A pause after 3 questions** keeps question embedding within Voyage's free limit of 3 requests per minute.
 
 ## Known limitations
 
@@ -105,6 +114,10 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 - **Numbered lists inside chapters are detected as sections,** creating 47 duplicate chunk IDs and ambiguous citations. Tracked in issue #[number].
 - **Some headings include reference codes,** such as 5.3. Unit Testing Tools [1-c22, 2-c8].
 - **Paraphrased questions score lower than direct ones** (about 0.42 compared with 0.67 in tests), so the fallback threshold must not be set too high.
+- **Headings that wrap onto two lines are cut off** in citations (e.g. 2.4. Some Paradigms for Development Life).
+- **Answers can drop qualifiers:** one answer turned "typically, but not always" into "typically".
+- **The 0.35 threshold is based on a few tests,** and will be checked in the evaluation.
+- **The question limit counts questions,** not time, so it can pause even when the per-minute limit has already reset.
 
 ## Roadmap
 
@@ -116,8 +129,8 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 - [x] Section-based chunks with chapter IDs and size splitting
 - [x] Embeddings (Voyage AI, batched for the free tier)
 - [x] Retrieval with cosine similarity
-- [ ] Answers with section citations
-- [ ] Question loop (`app.py`)
+- [x] Answers with section citations
+- [x] Question loop (`app.py`)
 - [ ] Evaluation with 10 test questions
 - [ ] Sentence-end cuts, merging very short chunks, repeating headings in split parts
 - [ ] Hybrid search (BM25 + vectors)
