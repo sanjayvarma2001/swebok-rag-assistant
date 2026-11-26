@@ -106,6 +106,14 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 - **Functions return, the app prints.** retrieve and answer return values, and only app.py prints. A future FastAPI endpoint can reuse both functions unchanged.
 - **A pause after 3 questions** keeps question embedding within Voyage's free limit of 3 requests per minute.
 
+## Evaluation (22 questions, run with python eval.py)
+
+- **Retrieval**: the correct section was in the top 3 for 16 of 17 answerable questions.
+- Off-topic: 4 of 5 were rejected by the score threshold. The fifth ("latest version of Python") passed the threshold, and is left to the model's fallback rule.
+- The one retrieval miss (ethics) traces to a chunker bug: a year ("1912.") was detected as a section heading and split the codes-of-ethics section. Tracked in issue #[n].
+
+Expected sections were labelled by hand, using keyword search to find candidates, independently of the retriever.
+
 ## Known limitations
 
 - **Parts are cut at fixed positions,** so a part can start or end mid-word. Cutting at sentence ends is planned.
@@ -131,7 +139,7 @@ The project has two parts: **indexing**, which runs once, and **answering**, whi
 - [x] Retrieval with cosine similarity
 - [x] Answers with section citations
 - [x] Question loop (`app.py`)
-- [ ] Evaluation with 10 test questions
+- [x] Evaluation with 16 of 17 test questions
 - [ ] Sentence-end cuts, merging very short chunks, repeating headings in split parts
 - [ ] Hybrid search (BM25 + vectors)
 - [ ] Later: FastAPI endpoint, pgvector and a web UI
