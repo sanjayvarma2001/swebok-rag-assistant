@@ -1,4 +1,3 @@
-from google import genai
 from google.genai import errors,types
 from config import gemini_client, GEMINI_MODEL
 from retriever import retrieve, formatted_string
@@ -36,6 +35,8 @@ def answer(question: str, chunks: str):
     except errors.APIError as e:
         print(f"Gemini Error: {e}")
         return "The answer service isn't available right now. Please try again in a moment."
+
+# Debugging and Individual testing
 
 if __name__ == "__main__":
     for q in ["What is unit testing?", "How do I bake bread?"]:
