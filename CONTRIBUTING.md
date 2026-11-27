@@ -47,6 +47,8 @@ Issues labelled `good first issue` are small and self-contained. Some areas that
 - Follow the existing style: snake_case names, UPPER_SNAKE constants at the top of the file, and a short docstring for each function.
 - Keep each function to one job, and keep settings in `config.py`.
 - Don't commit generated data (`data/`, `debug/`, `pages.json`), the PDF, or `.env`.
+- Never commit source documents or text generated from them (PDFs, `pages.json`, `chunks.json`,
+  `embeddings.json`). They may be copyrighted.
 
 ## Questions
 

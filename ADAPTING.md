@@ -2,6 +2,11 @@
 
 The pipeline works with other documents, such as study notes, a textbook or a manual. The cleaning rules in `chunker.py` are tuned to the SWEBOK Guide, so adapting them to your PDF is the main work, and a good way to learn how RAG data preparation works.
 
+> **Check your rights to the document.** Make sure you're allowed to use your PDF this way,
+> especially if you'll deploy the app publicly or use it commercially. Answers display excerpts
+> of the source, so check the document's licence or copyright notice. Openly licensed documents
+> (for example, Creative Commons) or your own notes are the safest choice.
+
 ## Before you start
 
 Follow the setup in the [README](README.md#run-it-locally), so you can run the project on the SWEBOK Guide first. Seeing it work once makes it much easier to tell what changes for your document.

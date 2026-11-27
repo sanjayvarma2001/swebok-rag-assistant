@@ -130,6 +130,19 @@ Expected sections were labelled by hand, using keyword search to find candidates
 - [Use it with your own PDF](ADAPTING.md)
 - [Contributing](CONTRIBUTING.md)
 
+## Source and copyright
+
+This project answers questions from the *Guide to the Software Engineering Body of Knowledge
+(SWEBOK Guide), Version 4.0a*, H. Washizaki, Ed., IEEE Computer Society, 2024.
+
+- The SWEBOK Guide is © IEEE. It is **not included** in this repository. Download it yourself from
+  the [IEEE Computer Society](https://www.computer.org/swebok).
+- IEEE permits personal and educational use without fee, under the conditions in the guide's
+  copyright notice. Commercial use, or redistributing its content, requires permission from IEEE.
+- This project is not affiliated with or endorsed by IEEE.
+- The MIT licence below covers **this project's code only**, not the SWEBOK Guide or any
+  document you use with it.
+
 ## Licence
 
 [MIT](LICENSE). The SWEBOK Guide itself is © IEEE and is not included in this repository.
